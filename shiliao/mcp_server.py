@@ -4,7 +4,7 @@
 표준 라이브러리만 쓴다. 네 프로바이더가 전부 MCP 를 말하므로 서버 하나면 통합이 하나다.
 
     python3 -m shiliao.mcp_server              # stdio  (Claude Code / Codex / Gemini CLI)
-    python3 -m shiliao.mcp_server --http 8787  # HTTP   (ChatGPT 커넥터 등 원격 클라이언트)
+    python3 -m shiliao.mcp_server --http 8787            # HTTP   (클로드 웹/앱·챗GPT 커넥터)\n    SHILIAO_TOKEN=... python3 -m shiliao.mcp_server --http 8787 0.0.0.0   # 외부 노출 시
 """
 import json, os, sys
 from . import index
@@ -83,33 +83,68 @@ def stdio():
             print(json.dumps(res, ensure_ascii=False), flush=True)
 
 
-def http(port):
-    """Streamable HTTP 전송. 챗GPT 커넥터처럼 stdio 를 못 붙이는 클라이언트용."""
+def http(port, host='127.0.0.1'):
+    """Streamable HTTP 전송. 클로드 웹/앱 커넥터·챗GPT 등 stdio 를 못 붙이는 클라이언트용.
+
+    브라우저에서 오는 커넥터는 프리플라이트를 보내고 CORS 를 본다. 공개 주소에 띄우는 순간
+    누구나 붙을 수 있으므로 SHILIAO_TOKEN 이 있으면 Bearer 로 막는다 —
+    127.0.0.1 밖으로 내보내면서 토큰을 안 걸면 그냥 열어 둔 것이다.
+    """
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    token = os.environ.get('SHILIAO_TOKEN')
 
     class H(BaseHTTPRequestHandler):
+        protocol_version = 'HTTP/1.1'
+
+        def cors(self):
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Access-Control-Allow-Headers',
+                             'Content-Type, Authorization, Mcp-Session-Id, MCP-Protocol-Version')
+            self.send_header('Access-Control-Allow-Methods', 'POST, GET, DELETE, OPTIONS')
+            self.send_header('Access-Control-Expose-Headers', 'Mcp-Session-Id')
+
+        def reply(self, code, body=b'', ctype='application/json'):
+            self.send_response(code)
+            self.cors()
+            if body:
+                self.send_header('Content-Type', ctype)
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            if body:
+                self.wfile.write(body)
+
+        def do_OPTIONS(self):
+            self.reply(204)
+
+        def do_GET(self):
+            # 서버가 먼저 말을 걸 일이 없어 SSE 스트림을 열지 않는다. 사양상 405 가 정답이다.
+            self.reply(405)
+
+        do_DELETE = do_GET
+
         def do_POST(self):
+            if token and self.headers.get('Authorization') != f'Bearer {token}':
+                self.reply(401, b'{"error":"unauthorized"}'); return
             body = self.rfile.read(int(self.headers.get('Content-Length', 0)))
             try:
                 res = handle(json.loads(body))
             except Exception as e:                                # noqa: BLE001
                 res = {'jsonrpc': '2.0', 'id': None, 'error': {'code': -32603, 'message': str(e)}}
             if res is None:
-                self.send_response(202); self.end_headers(); return
-            out = json.dumps(res, ensure_ascii=False).encode()
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Content-Length', str(len(out)))
-            self.end_headers()
-            self.wfile.write(out)
+                self.reply(202); return
+            self.reply(200, json.dumps(res, ensure_ascii=False).encode())
 
         def log_message(self, *a):
             pass
 
-    print(f'shiliao MCP · http://127.0.0.1:{port}/', file=sys.stderr)
-    ThreadingHTTPServer(('127.0.0.1', port), H).serve_forever()
+    guard = '토큰 인증' if token else '인증 없음(로컬 전용으로만 써라)'
+    print(f'shiliao MCP · http://{host}:{port}/ · {guard}', file=sys.stderr)
+    ThreadingHTTPServer((host, port), H).serve_forever()
 
 
 if __name__ == '__main__':
     a = sys.argv[1:]
-    http(int(a[1]) if len(a) > 1 else 8787) if a and a[0] == '--http' else stdio()
+    if a and a[0] == '--http':
+        http(int(a[1]) if len(a) > 1 else 8787, a[2] if len(a) > 2 else '127.0.0.1')
+    else:
+        stdio()

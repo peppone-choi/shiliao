@@ -140,9 +140,35 @@ python3 -m shiliao.mcp_server --http 8787  # HTTP   — ChatGPT 커넥터 등 �
 | 클라이언트 | 붙이는 법 |
 |---|---|
 | **Claude Code** | `mcp.json` 을 프로젝트 `.mcp.json` 으로 복사, 경로 수정. 또는 스킬로: `cp -r skill ~/.claude/skills/historical-sources` |
+| **Claude 데스크톱 앱** | `mcp.json` 의 `mcpServers` 를 `~/Library/Application Support/Claude/claude_desktop_config.json` 에 병합 (윈도우는 `%APPDATA%\Claude\`) |
+| **Claude 웹 (claude.ai)** | 원격 커넥터만 받는다 — 아래 참조 |
 | **Codex** | `codex-config.toml` 내용을 `~/.codex/config.toml` 에 붙여 넣는다 |
 | **Gemini CLI** | `mcp.json` 을 `~/.gemini/settings.json` 의 `mcpServers` 에 병합 |
-| **ChatGPT** | `--http 8787` 로 띄우고 개발자 모드 커넥터에 URL 등록 (외부에서 붙일 땐 터널·인증을 직접 앞에 둘 것 — 서버는 127.0.0.1 만 듣는다) |
+| **ChatGPT** | 개발자 모드 커넥터에 아래 HTTPS URL 등록 |
+
+### 원격 커넥터 (클로드 웹 · 챗GPT)
+
+브라우저에서 도는 클라이언트는 로컬 프로세스를 실행하지 못한다. stdio 가 아니라
+**공개된 HTTPS 엔드포인트**가 필요하다. 인덱스는 당신 기계에 있으므로, 서버를 띄우고
+터널로 노출하는 형태가 된다.
+
+```bash
+export SHILIAO_TOKEN=$(python3 -c 'import secrets;print(secrets.token_urlsafe(32))')
+python3 -m shiliao.mcp_server --http 8787 0.0.0.0
+cloudflared tunnel --url http://localhost:8787       # 또는 ngrok http 8787
+```
+
+터널이 출력한 `https://…` 를 커넥터 URL 로 넣고, 인증 헤더에
+`Authorization: Bearer $SHILIAO_TOKEN` 을 준다.
+
+알아 둘 것 셋:
+
+- **토큰 없이 `0.0.0.0` 에 띄우지 마라.** 그 순간 주소를 아는 누구나 당신 기계의
+  인덱스를 조회한다. `SHILIAO_TOKEN` 이 설정돼 있지 않으면 서버가 기동 로그에
+  「인증 없음」이라고 찍는다.
+- **당신 기계가 꺼지면 커넥터도 죽는다.** 상시로 쓰려면 어딘가에 올려 둬야 하는데,
+  그때는 코퍼스 재배포가 되는지부터 확인해라(아래 라이선스 항목).
+- **터널 주소는 대개 재시작마다 바뀐다.** 고정 주소가 필요하면 named tunnel 을 쓴다.
 
 규칙은 `INSTRUCTIONS.md` 한 곳에 있고 `AGENTS.md`·`GEMINI.md`·`CLAUDE.md` 는 그 심볼릭 링크다.
 프로바이더별로 규칙이 갈라지면 갈라진 만큼 어긋나기 때문이다. MCP `initialize` 응답과
