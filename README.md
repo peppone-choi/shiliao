@@ -128,12 +128,25 @@ CHGIS 같은 간체 데이터셋과 대조할 때 이것 하나로 몇 시간을
 
 ## AI 에이전트와 함께 쓰기
 
-`skill/SKILL.md`는 Claude Code 스킬이다. 복사하면 에이전트가 역사적 주장을 하기 전에
-먼저 질의하게 된다.
+특정 도구 전용이 아니다. 네 프로바이더가 전부 MCP를 말하므로 서버는 하나다 —
+`shiliao/mcp_server.py`, 표준 라이브러리만 쓰는 약 130줄이다. 노출하는 도구도 하나,
+`search_sources(term, book?, era?, limit?)`.
 
 ```bash
-cp -r skill ~/.claude/skills/historical-sources
+python3 -m shiliao.mcp_server              # stdio  — Claude Code · Codex · Gemini CLI
+python3 -m shiliao.mcp_server --http 8787  # HTTP   — ChatGPT 커넥터 등 원격 클라이언트
 ```
+
+| 클라이언트 | 붙이는 법 |
+|---|---|
+| **Claude Code** | `mcp.json` 을 프로젝트 `.mcp.json` 으로 복사, 경로 수정. 또는 스킬로: `cp -r skill ~/.claude/skills/historical-sources` |
+| **Codex** | `codex-config.toml` 내용을 `~/.codex/config.toml` 에 붙여 넣는다 |
+| **Gemini CLI** | `mcp.json` 을 `~/.gemini/settings.json` 의 `mcpServers` 에 병합 |
+| **ChatGPT** | `--http 8787` 로 띄우고 개발자 모드 커넥터에 URL 등록 (외부에서 붙일 땐 터널·인증을 직접 앞에 둘 것 — 서버는 127.0.0.1 만 듣는다) |
+
+규칙은 `INSTRUCTIONS.md` 한 곳에 있고 `AGENTS.md`·`GEMINI.md`·`CLAUDE.md` 는 그 심볼릭 링크다.
+프로바이더별로 규칙이 갈라지면 갈라진 만큼 어긋나기 때문이다. MCP `initialize` 응답과
+도구 설명에도 같은 문구를 실어, 지침 파일을 안 읽는 클라이언트도 규칙을 받는다.
 
 핵심 규약은 하나다 — **0건은 UNKNOWN이지 기억으로 채울 자리가 아니다.**
 그리고 正史와 演義를 뭉뚱그린 한 문장으로 답하지 않는다. 등급이 다른 주장은 따로 세운다.

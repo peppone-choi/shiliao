@@ -126,7 +126,11 @@ def build():
     print('  ' + ' · '.join(f'{b}{sum(1 for r in rows if r[0]==b)}' for b in books), file=sys.stderr)
 
 
-def query(term, book, era, limit):
+def search(term, book=None, era=False, limit=10):
+    """질의 결과를 [{book, vol, title, snippet}] 로 돌려준다. 미검출이면 빈 리스트.
+
+    CLI 도 MCP 서버도 이 함수 하나만 쓴다 — 표면이 갈라지면 규칙도 갈라진다.
+    """
     con = sqlite3.connect(DB)
     where, args = ['src match ?'], ['body : "' + split(term) + '"']
     if book:
@@ -137,13 +141,19 @@ def query(term, book, era, limit):
     hits = con.execute(
         'select book, vol, title, snippet(src, 3, "《", "》", "…", 26) from src '
         'where ' + ' and '.join(where) + ' order by rank limit ?', args).fetchall()
+    return [{'book': b, 'vol': v, 'title': t, 'snippet': s.replace(' ', '')}
+            for b, v, t, s in hits]
+
+
+def query(term, book, era, limit):
+    hits = search(term, book, era, limit)
     if not hits:
         scope = book or ('삼국지 시대 사서' if era else '전체 코퍼스')
         print(f'✗ 「{term}」 — {scope}에서 미검출. 사료 근거 없음(추측으로 채우지 말 것).')
         return
-    for b, v, t, snip in hits:
-        head = f'{b} {v}' + (f' {t}' if t else '')
-        print(f'[{head}]\n  {snip.replace(" ", "")}')
+    for h in hits:
+        head = f"{h['book']} {h['vol']}" + (f" {h['title']}" if h['title'] else '')
+        print(f"[{head}]\n  {h['snippet']}")
 
 
 def main():

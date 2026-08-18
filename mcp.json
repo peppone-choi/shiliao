@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "shiliao": {
+      "command": "python3",
+      "args": ["-m", "shiliao.mcp_server"],
+      "cwd": "/절대/경로/shiliao",
+      "env": { "SHILIAO_HOME": "/절대/경로/코퍼스" }
+    }
+  }
+}
