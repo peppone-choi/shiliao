@@ -140,45 +140,73 @@ python3 -m shiliao.mcp_server --http 8787  # HTTP   — ChatGPT 커넥터 등 �
 | 클라이언트 | 붙이는 법 |
 |---|---|
 | **Claude Code** | `mcp.json` 을 프로젝트 `.mcp.json` 으로 복사, 경로 수정. 또는 스킬로: `cp -r skill ~/.claude/skills/historical-sources` |
-| **Claude 데스크톱 앱** | `mcp.json` 의 `mcpServers` 를 `~/Library/Application Support/Claude/claude_desktop_config.json` 에 병합 (윈도우는 `%APPDATA%\Claude\`) |
-| **Claude 웹 (claude.ai)** | 원격 커넥터만 받는다 — 아래 참조 |
 | **Codex** | `codex-config.toml` 내용을 `~/.codex/config.toml` 에 붙여 넣는다 |
 | **Gemini CLI** | `mcp.json` 을 `~/.gemini/settings.json` 의 `mcpServers` 에 병합 |
-| **ChatGPT 웹/앱** | 설정 → 커넥터 → 개발자 모드에서 아래 HTTPS URL 등록 (Plus 이상) |\n| **Gemini Enterprise · Spark** | 커스텀 MCP 서버 URL 로 아래 HTTPS URL 등록 |
+| **Claude 데스크톱 앱** | 아래 A |
+| **Claude 웹 · ChatGPT 웹/앱 · Gemini 웹/앱** | 아래 B (전부 같은 URL 하나) |
 
-### 원격 커넥터 (클로드 웹 · 챗GPT · Gemini)
+규칙은 `INSTRUCTIONS.md` 한 곳에 있고 `AGENTS.md`·`GEMINI.md`·`CLAUDE.md` 는 그 심볼릭 링크다.
+프로바이더별로 규칙이 갈라지면 갈라진 만큼 어긋나기 때문이다. MCP `initialize` 응답과
+도구 설명에도 같은 문구를 실어, 지침 파일을 안 읽는 클라이언트도 규칙을 받는다.
 
-브라우저에서 도는 클라이언트는 로컬 프로세스를 실행하지 못한다. stdio 가 아니라
-**공개된 HTTPS 엔드포인트**가 필요하다. 인덱스는 당신 기계에 있으므로, 서버를 띄우고
-터널로 노출하는 형태가 된다. 셋 다 같은 URL 하나를 본다.
+핵심 규약은 하나다 — **0건은 UNKNOWN이지 기억으로 채울 자리가 아니다.**
+그리고 正史와 演義를 뭉뚱그린 한 문장으로 답하지 않는다. 등급이 다른 주장은 따로 세운다.
+
+### A. 데스크톱 앱 (로컬 stdio)
+
+`mcp.json` 의 `mcpServers` 블록을 설정 파일에 병합하고 경로 두 개를 실제 값으로 고친다.
+Claude 데스크톱 앱을 완전히 종료했다 다시 켜면 도구 목록에 `shiliao` 가 뜬다.
+
+```
+macOS    ~/Library/Application Support/Claude/claude_desktop_config.json
+Windows  %APPDATA%\Claude\claude_desktop_config.json
+```
+
+### B. 웹·모바일 앱 (원격 커넥터)
+
+브라우저와 폰에서 도는 클라이언트는 당신 기계의 프로세스를 실행하지 못한다. stdio 가 아니라
+**공개된 HTTPS 엔드포인트**가 필요하다. 인덱스는 당신 기계에 있으므로, 서버를 띄우고 터널로
+노출하는 형태가 된다. 아래 넷이 전부 이 URL 하나를 본다.
 
 ```bash
 export SHILIAO_TOKEN=$(python3 -c 'import secrets;print(secrets.token_urlsafe(32))')
+export SHILIAO_HOME=/절대/경로/코퍼스
 python3 -m shiliao.mcp_server --http 8787 0.0.0.0
 cloudflared tunnel --url http://localhost:8787       # 또는 ngrok http 8787
+echo "https://<터널이-출력한-주소>/$SHILIAO_TOKEN/"   # ← 커넥터에 넣을 URL
 ```
 
-터널이 출력한 `https://…` 를 커넥터 URL 로 넣고, 인증 헤더에
-`Authorization: Bearer $SHILIAO_TOKEN` 을 준다.
+**토큰을 URL 경로에 넣는 이유**: 커넥터 UI 들은 정적 `Authorization` 헤더를 넣는 칸이 없다.
+클로드는 OAuth 클라이언트 ID/시크릿, 제미나이는 DCR 또는 자격증명을 묻는다. 그래서 서버가
+`Bearer` 헤더와 URL 경로 둘 다로 같은 토큰을 받는다. URL 자체가 열쇠이므로 아무 데나 붙여넣지 마라.
+
+| 클라이언트 | 넣는 곳 |
+|---|---|
+| **Claude 웹 / 데스크톱** | Customize → Connectors → `+` → 이름과 URL 입력 → Add |
+| **ChatGPT 웹** | 설정 → Connectors → 맨 아래 Advanced settings → Developer Mode 켜기 → 설정 → Apps & Connectors → Create → 엔드포인트 입력 |
+| **ChatGPT 앱** | 커넥터 추가는 웹에서만 된다. 추가해 두면 같은 계정의 앱에서 쓸 수 있다 |
+| **Gemini 웹** | gemini.google.com → 하단 설정 및 도움말 → Connected Apps → "Custom apps for Spark" 에 URL 입력 |
+| **Gemini 앱 (Android)** | 같은 Connected Apps 화면. 프롬프트에서 `@` 로 커스텀 앱을 지정해 부른다 |
+| **Gemini Enterprise** | 커스텀 MCP 서버 데이터스토어로 등록 |
 
 클라이언트별로 걸리는 지점:
 
-- **챗GPT** — 개발자 모드 대화에서는 서버가 노출하는 도구를 그대로 쓰지만,
-  딥리서치·기업지식 경로는 `search`(인자 `query`)와 `fetch`(인자 `id`) 두 도구를
-  이름과 모양까지 강제한다. 그래서 이 서버는 `search_sources` 외에 그 한 쌍도 함께 노출한다.
-  `search` 는 권 목록을, `fetch` 는 그 권의 전문(마크업 제거)을 준다.
-- **Gemini** — Enterprise 와 Spark 가 커스텀 MCP URL 을 받는다. **StreamableHTTP 전용이고
-  레거시 SSE 는 안 받는다** — 이 서버가 기본으로 JSON 한 방을 돌려주므로 그대로 맞는다.
-  일반 Gemini 앱 대화에서 붙는지는 확인하지 못했다(UNKNOWN). CLI 는 stdio 로 붙는다.
-- **클로드** — 웹은 커넥터, 데스크톱 앱은 stdio 가 더 간단하다.
+- **ChatGPT** — 개발자 모드 대화에서는 서버가 노출하는 도구를 그대로 쓰지만, 딥리서치·기업지식
+  경로는 `search`(인자 `query`)와 `fetch`(인자 `id`) 두 도구를 이름과 모양까지 강제한다.
+  그래서 이 서버는 `search_sources` 외에 그 한 쌍도 함께 노출한다. 개발자 모드는 유료 플랜이고,
+  워크스페이스 계정이면 관리자만 켤 수 있다.
+- **Gemini** — 개인 구글 계정이어야 하고(직장·학교 계정은 안 된다), Keep Activity 가 켜져 있어야
+  붙는다. **StreamableHTTP 전용이고 레거시 SSE 는 안 받는다** — 이 서버가 기본으로 JSON 한 방을
+  돌려주므로 그대로 맞는다.
+- **Claude** — 커넥터는 앤트로픽 클라우드에서 당신 서버로 접속한다. 즉 사설망 주소는 안 되고
+  공개 인터넷에서 닿아야 한다. 터널이 필요한 이유가 이것이다.
 
 그리고 공통으로 셋:
 
-- **토큰 없이 `0.0.0.0` 에 띄우지 마라.** 그 순간 주소를 아는 누구나 당신 기계의
-  인덱스를 조회한다. `SHILIAO_TOKEN` 이 설정돼 있지 않으면 서버가 기동 로그에
-  「인증 없음」이라고 찍는다.
-- **당신 기계가 꺼지면 커넥터도 죽는다.** 상시로 쓰려면 어딘가에 올려 둬야 하는데,
-  그때는 코퍼스 재배포가 되는지부터 확인해라(아래 라이선스 항목).
+- **토큰 없이 `0.0.0.0` 에 띄우지 마라.** 그 순간 주소를 아는 누구나 당신 기계의 인덱스를
+  조회한다. `SHILIAO_TOKEN` 이 설정돼 있지 않으면 서버가 기동 로그에 「인증 없음」이라고 찍는다.
+- **당신 기계가 꺼지면 커넥터도 죽는다.** 상시로 쓰려면 어딘가에 올려 둬야 하는데, 그때는
+  코퍼스 재배포가 되는지부터 확인해라(아래 라이선스 항목).
 - **터널 주소는 대개 재시작마다 바뀐다.** 고정 주소가 필요하면 named tunnel 을 쓴다.
 
 ## 라이선스

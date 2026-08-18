@@ -163,7 +163,11 @@ def http(port, host='127.0.0.1'):
         do_DELETE = do_GET
 
         def do_POST(self):
-            if token and self.headers.get('Authorization') != f'Bearer {token}':
+            # 커넥터 UI 들은 정적 헤더를 넣는 칸이 없다(클로드=OAuth, 제미나이=DCR/자격증명).
+            # 그래서 URL 경로로도 같은 토큰을 받는다 — https://…/<token>/ 로 붙이면 된다.
+            ok = (self.headers.get('Authorization') == f'Bearer {token}'
+                  or self.path.strip('/').split('/')[0] == token)
+            if token and not ok:
                 self.reply(401, b'{"error":"unauthorized"}'); return
             body = self.rfile.read(int(self.headers.get('Content-Length', 0)))
             try:
