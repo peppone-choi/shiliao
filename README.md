@@ -164,7 +164,7 @@ python3 -m shiliao.mcp_server --http 8787  # HTTP   — ChatGPT 커넥터 등 �
 | **Claude 데스크톱 앱** | 아래 A |
 | **Claude 웹 · ChatGPT 웹/앱 · Gemini 웹/앱** | 아래 B (전부 같은 URL 하나) |
 
-규칙은 `INSTRUCTIONS.md` 한 곳에 있고 `AGENTS.md`·`GEMINI.md`·`CLAUDE.md` 는 그 심볼릭 링크다.
+규칙은 `AGENTS.md` 한 곳에 있고 `CLAUDE.md`·`GEMINI.md` 는 그리로 넘기는 한 줄짜리다.
 프로바이더별로 규칙이 갈라지면 갈라진 만큼 어긋나기 때문이다. MCP `initialize` 응답과
 도구 설명에도 같은 문구를 실어, 지침 파일을 안 읽는 클라이언트도 규칙을 받는다.
 
