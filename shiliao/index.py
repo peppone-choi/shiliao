@@ -16,7 +16,10 @@
 """
 import argparse, glob, os, re, sqlite3, sys
 
-HOME = os.environ.get('SHILIAO_HOME') or os.path.expanduser('~/.shiliao')
+# 레포에 코퍼스가 같이 들어 있다. 클론만 하면 바로 질의된다 — 설정도 다운로드도 없다.
+_BUNDLED = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'corpus')
+HOME = (os.environ.get('SHILIAO_HOME')
+        or (_BUNDLED if os.path.isdir(_BUNDLED) else os.path.expanduser('~/.shiliao')))
 DB = os.path.join(HOME, 'index.db')
 
 BOOK = {'sgz': '三國志', 'hhs': '後漢書', 'hyg': '華陽國志', 'js': '晉書', 'js2': '晉書',

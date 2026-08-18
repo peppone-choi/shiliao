@@ -68,6 +68,23 @@ $ shiliao 白毦兵
 
 ## 설치
 
+**클론이 곧 설치다.** 코퍼스(`corpus/`, 1,275권)와 만들어 둔 인덱스(`index.db`, 85MB)가
+저장소에 함께 들어 있어 받자마자 질의된다. 다운로드도 빌드도 없다.
+
+```bash
+git clone <repo> shiliao && cd shiliao
+python3 -m shiliao.index 白馬義從
+```
+
+`index.db` 는 Git LFS 로 관리한다 — 85MB 바이너리를 일반 git 객체로 넣으면 다시 만들 때마다
+히스토리에 85MB 가 영구히 쌓인다. 클론 전에 `git lfs install` 이 되어 있어야 한다.
+없으면 `index.db` 자리에 포인터 텍스트가 놓이고, 그때는 `python3 -m shiliao.index` 로
+`corpus/*.txt` 에서 1분이면 다시 만들 수 있다.
+
+<details><summary>예전 방식 — 코퍼스를 직접 받기</summary>
+
+
+
 Python 3.8+ 외엔 아무것도 필요 없다. 의존성 0 — SQLite FTS5는 표준 라이브러리다.
 
 ```bash
@@ -84,6 +101,8 @@ echo "alias shiliao='python3 -m shiliao.index'" >> ~/.zshrc
 
 받는 도중 끊겨도 괜찮다. 다시 실행하면 있는 파일은 건너뛰고 이어받는다.
 위키소스는 병렬도를 올리면 **오류 없이 빈 응답**을 주니 `--jobs`를 4 위로 올리지 마라.
+
+</details>
 
 ## 쓰기
 
@@ -139,7 +158,7 @@ python3 -m shiliao.mcp_server --http 8787  # HTTP   — ChatGPT 커넥터 등 �
 
 | 클라이언트 | 붙이는 법 |
 |---|---|
-| **Claude Code** | `mcp.json` 을 프로젝트 `.mcp.json` 으로 복사, 경로 수정. 또는 스킬로: `cp -r skill ~/.claude/skills/historical-sources` |
+| **Claude Code** | 스킬이 정본이다 — 이 저장소를 통째로 `~/.claude/skills/historical-sources` 로 클론하면 끝. MCP 로 붙이려면 `mcp.json` 을 프로젝트 `.mcp.json` 으로 복사 |
 | **Codex** | `codex-config.toml` 내용을 `~/.codex/config.toml` 에 붙여 넣는다 |
 | **Gemini CLI** | `mcp.json` 을 `~/.gemini/settings.json` 의 `mcpServers` 에 병합 |
 | **Claude 데스크톱 앱** | 아래 A |
