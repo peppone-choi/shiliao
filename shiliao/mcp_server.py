@@ -31,7 +31,40 @@ TOOLS = [{
         },
         'required': ['term'],
     },
+}, {
+    # 챗GPT 의 딥리서치·기업지식 경로는 이 이름과 이 모양(문자열 인자 하나)을 강제한다.
+    # 개발자 모드 대화에서는 search_sources 를 그대로 써도 되지만, 한 서버로 양쪽을 덮는다.
+    'name': 'search',
+    'description': '삼국지 시대 한문 사료에서 검색어가 나오는 권을 찾는다. ' + RULES,
+    'inputSchema': {'type': 'object', 'required': ['query'],
+                    'properties': {'query': {'type': 'string', 'description': '번체 한자 검색어'}}},
+}, {
+    'name': 'fetch',
+    'description': 'search 가 돌려준 id 의 권 전문을 가져온다.',
+    'inputSchema': {'type': 'object', 'required': ['id'],
+                    'properties': {'id': {'type': 'string', 'description': 'search 결과의 id'}}},
 }]
+
+
+def head(h):
+    return f"{h['book']} {h['vol']}" + (f" {h['title']}" if h['title'] else '')
+
+
+def oa_search(query):
+    """챗GPT 규격 — content[0].text 에 JSON 문자열을 담는다."""
+    hits = index.search(query, limit=20)
+    return json.dumps({'results': [
+        {'id': h['id'], 'title': head(h), 'url': f"shiliao://{h['id']}", 'text': h['snippet']}
+        for h in hits]}, ensure_ascii=False)
+
+
+def oa_fetch(rid):
+    v = index.volume(int(rid)) if str(rid).isdigit() else None
+    if not v:
+        return json.dumps({'error': f'unknown id: {rid}'}, ensure_ascii=False)
+    return json.dumps({'id': str(rid), 'title': f"{v['book']} {v['vol']}" + (f" {v['title']}" if v['title'] else ''),
+                       'url': f'shiliao://{rid}', 'text': v['text'],
+                       'metadata': {'book': v['book'], 'vol': v['vol']}}, ensure_ascii=False)
 
 
 def call(args):
@@ -59,10 +92,17 @@ def handle(req):
         r = {'tools': TOOLS}
     elif m == 'tools/call':
         p = req.get('params', {})
-        if p.get('name') != 'search_sources':
+        name, a = p.get('name'), p.get('arguments', {})
+        if name == 'search_sources':
+            text = call(a)
+        elif name == 'search':
+            text = oa_search(a.get('query', ''))
+        elif name == 'fetch':
+            text = oa_fetch(a.get('id', ''))
+        else:
             return {'jsonrpc': '2.0', 'id': rid,
-                    'error': {'code': -32602, 'message': f"unknown tool: {p.get('name')}"}}
-        r = {'content': [{'type': 'text', 'text': call(p.get('arguments', {}))}]}
+                    'error': {'code': -32602, 'message': f'unknown tool: {name}'}}
+        r = {'content': [{'type': 'text', 'text': text}]}
     elif rid is None:
         return None                       # notifications/initialized 등 — 응답하면 프로토콜 위반이다.
     else:
@@ -132,7 +172,14 @@ def http(port, host='127.0.0.1'):
                 res = {'jsonrpc': '2.0', 'id': None, 'error': {'code': -32603, 'message': str(e)}}
             if res is None:
                 self.reply(202); return
-            self.reply(200, json.dumps(res, ensure_ascii=False).encode())
+            out = json.dumps(res, ensure_ascii=False)
+            # 사양상 JSON 한 방으로 끝내도 되지만, event-stream 만 받겠다는 클라이언트가 있다.
+            # 프레임 하나로 감싸 주면 같은 응답이 양쪽에서 다 읽힌다.
+            acc = self.headers.get('Accept', '')
+            if 'text/event-stream' in acc and 'application/json' not in acc:
+                self.reply(200, f'event: message\ndata: {out}\n\n'.encode(), 'text/event-stream')
+            else:
+                self.reply(200, out.encode())
 
         def log_message(self, *a):
             pass

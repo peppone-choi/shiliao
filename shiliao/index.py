@@ -139,10 +139,10 @@ def search(term, book=None, era=False, limit=10):
         where.append('book in (%s)' % ','.join('?' * len(ERA_BOOKS))); args += sorted(ERA_BOOKS)
     args.append(limit)
     hits = con.execute(
-        'select book, vol, title, snippet(src, 3, "《", "》", "…", 26) from src '
+        'select rowid, book, vol, title, snippet(src, 3, "《", "》", "…", 26) from src '
         'where ' + ' and '.join(where) + ' order by rank limit ?', args).fetchall()
-    return [{'book': b, 'vol': v, 'title': t, 'snippet': s.replace(' ', '')}
-            for b, v, t, s in hits]
+    return [{'id': str(r), 'book': b, 'vol': v, 'title': t, 'snippet': s.replace(' ', '')}
+            for r, b, v, t, s in hits]
 
 
 def query(term, book, era, limit):
@@ -154,6 +154,20 @@ def query(term, book, era, limit):
     for h in hits:
         head = f"{h['book']} {h['vol']}" + (f" {h['title']}" if h['title'] else '')
         print(f"[{head}]\n  {h['snippet']}")
+
+
+def volume(rowid):
+    """권 하나의 전문. 색인은 글자마다 공백을 넣어 저장하므로 되돌려서 준다."""
+    con = sqlite3.connect(DB)
+    row = con.execute('select book, vol, title, body from src where rowid = ?', [rowid]).fetchone()
+    if not row:
+        return None
+    b, v, t, body = row
+    body = body.replace(' ', '')
+    body = re.sub(r'<ref[^>]*>.*?</ref>|<[^>]+>', '', body)
+    body = re.sub(r'\{\{[^{}]*\}\}', '', body)          # 교감주·품질틀. 본문이 아니다.
+    body = re.sub(r"\[\[[^\]|]*\|?([^\]]*)\]\]", r'\1', body)
+    return {'book': b, 'vol': v, 'title': t, 'text': re.sub(r'\n{3,}', '\n\n', body).strip()}
 
 
 def main():
