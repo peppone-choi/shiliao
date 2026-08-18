@@ -1,6 +1,6 @@
 ---
 name: historical-sources
-description: Use when a claim about the Three Kingdoms era (184-280 CE) or Han China needs a primary source — unit types, offices, place names, people, events, distances, populations. Queries a bundled index over 1,275 volumes of public-domain Chinese histories (三國志 with 裴松之注, 後漢書 with 續漢書 志, 華陽國志, 晉書, 資治通鑑, 漢書, 史記, 讀史方輿紀要, 三國演義 and more) and returns book, chapter title, and the verbatim passage. Use it INSTEAD of answering from memory, and use it to prove a term is absent before treating it as invented.
+description: Use when a claim about the Three Kingdoms era (184-280 CE) or Han China needs a primary source — unit types, offices, place names, people, events, distances, populations. Queries a bundled index over 714 volumes of public-domain Chinese histories (三國志 with 裴松之注, 後漢書 with 續漢書 志, 華陽國志, 晉書, 資治通鑑, 漢書, 史記, 讀史方輿紀要, 三國演義 and more) and returns book, chapter title, and the verbatim passage. Use it INSTEAD of answering from memory, and use it to prove a term is absent before treating it as invented.
 ---
 
 # Historical Sources — 삼국지 시대 사료 질의
@@ -31,9 +31,18 @@ Two volume ranges worth knowing: 後漢書 卷109–113 是 **郡國志** (the 1
 their county lists) and 卷114–118 是 **百官志** (offices with their salary ranks, including
 the 部-曲-屯 military ladder). This edition numbers 續漢書 志 as 後漢書 卷91–120.
 
+## Scope — what this bundle holds
+
+714 volumes: 三國志(裴松之注 포함) · 後漢書(續漢書 志 포함) · 華陽國志 · 晉書 · 資治通鑑 ·
+三國演義 · 漢書 · 元和郡縣圖志 · 世說新語.
+
+史記 · 宋書 · 魏書 · 隋書 · 讀史方輿紀要 (557권) 은 짝 스킬 **`historical-sources-ext`** 에
+있다. 업로드 한도(30MB) 때문에 왕조 선으로 나눈 것이고, 버린 것이 아니다. 시대 밖 지명·제도를
+확인해야 하면 그쪽을 부른다. 저장소를 클론하면 1,271권이 한 색인에 다 있다.
+
 ## Setup
 
-None. The corpus and the built index ship in this repository (`corpus/`, 1,275 volumes +
+None. The corpus and the built index ship in this repository (`corpus/`, 1,271 volumes +
 `index.db`), so a clone is queryable immediately. Run the commands from the repo root.
 
 ```bash

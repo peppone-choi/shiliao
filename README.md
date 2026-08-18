@@ -68,7 +68,7 @@ $ shiliao 白毦兵
 
 ## 설치
 
-**클론이 곧 설치다.** 코퍼스(`corpus/`, 1,275권)와 만들어 둔 인덱스(`index.db`, 85MB)가
+**클론이 곧 설치다.** 코퍼스(`corpus/`, 1,271권)와 만들어 둔 인덱스(`index.db`, 41MB)가
 저장소에 함께 들어 있어 받자마자 질의된다. 다운로드도 빌드도 없다.
 
 ```bash
@@ -76,7 +76,7 @@ git clone <repo> shiliao && cd shiliao
 python3 -m shiliao.index 白馬義從
 ```
 
-`index.db` 는 Git LFS 로 관리한다 — 85MB 바이너리를 일반 git 객체로 넣으면 다시 만들 때마다
+`index.db` 는 Git LFS 로 관리한다 — 41MB 바이너리를 일반 git 객체로 넣으면 다시 만들 때마다
 히스토리에 85MB 가 영구히 쌓인다. 클론 전에 `git lfs install` 이 되어 있어야 한다.
 없으면 `index.db` 자리에 포인터 텍스트가 놓이고, 그때는 `python3 -m shiliao.index` 로
 `corpus/*.txt` 에서 1분이면 다시 만들 수 있다.
@@ -144,6 +144,23 @@ CHGIS 같은 간체 데이터셋과 대조할 때 이것 하나로 몇 시간을
 
 편명은 위키텍스트 헤더의 `section=`에서, 三國志의 입전 인물은 `notes=`에서 뽑는다.
 그래서 결과가 「卷55」가 아니라 「卷55 吳書·十二虎臣傳 (程普 黃蓋 韓當…)」로 나온다.
+
+## claude.ai 에 스킬로 올리기
+
+업로드 한도가 압축 해제 기준 30MB 인데 전권 색인은 41MB 다. 사서를 버리는 대신 왕조 선에서
+둘로 나눈다 — 스킬은 여러 개 올릴 수 있고, 두 묶음은 쓰임이 다르다.
+
+```bash
+./make-skill.sh    # dist/historical-sources.zip (714권 22MB)
+                   # dist/historical-sources-ext.zip (557권 21MB)
+```
+
+`historical-sources` 가 삼국지 시대를 직접 다루는 사서 + 배경·지리를 들고,
+`historical-sources-ext` 가 史記·宋書·魏書·隋書·讀史方輿紀要를 든다. 220년 안쪽 질문은
+core 하나로 끝나므로 ext 는 필요할 때만 올리면 된다. 둘을 합치면 1,271권 전권이다.
+
+각 SKILL.md 가 자기 범위와 상대 번들을 명시한다. 범위를 안 밝힌 미검출은 「사서에 없음」으로
+읽히기 때문이다.
 
 ## AI 에이전트와 함께 쓰기
 

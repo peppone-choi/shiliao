@@ -14,7 +14,7 @@
     python3 -m shiliao.index 連弩 --book 華陽國志
     python3 -m shiliao.index 突騎 --era           # 삼국지 시대(184~280) 사서만
 """
-import argparse, glob, os, re, sqlite3, sys
+import argparse, glob, os, re, sqlite3, sys, zlib
 
 # 레포에 코퍼스가 같이 들어 있다. 클론만 하면 바로 질의된다 — 설정도 다운로드도 없다.
 _BUNDLED = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'corpus')
@@ -107,45 +107,69 @@ def years(text):
     return (min(ys), max(ys)) if ys else (None, None)
 
 
-def build():
+def build(books=None):
+    """색인을 만든다. FTS 에는 본문을 **저장하지 않는다**(content='').
+
+    예전 판은 글자분할한 본문을 FTS 가 통째로 한 벌 더 들고 있었다 — 원문 41MB 에
+    DB 가 85MB 였던 이유다. 검색에 필요한 건 색인이고 본문은 스니펫에만 쓰이므로,
+    본문은 zlib 로 눌러 별도 테이블에 두고 스니펫은 파이썬에서 잘라 낸다.
+    """
     os.makedirs(HOME, exist_ok=True)
     con = sqlite3.connect(DB)
     con.executescript(
-        'drop table if exists src;'
-        "create virtual table src using fts5(book, vol, title, body, y0 unindexed, y1 unindexed,"
-        " tokenize='unicode61');")
-    rows = []
+        'drop table if exists src; drop table if exists vol;'
+        'create table vol (book, vol, title, y0, y1, body blob);'
+        "create virtual table src using fts5(body, tokenize='unicode61', content='');")
+    rows = 0
     for path in sorted(glob.glob(os.path.join(HOME, '*.txt'))):
+        name = os.path.basename(path)
+        if books and name.split('-')[0] not in books:
+            continue
         text = open(path, encoding='utf-8', errors='replace').read()
-        m = meta(os.path.basename(path), text)
+        m = meta(name, text)
         if not m:
             continue
         y0, y1 = years(text)
-        rows.append((m[0], m[1], m[2], split(text), y0, y1))
-    con.executemany('insert into src values (?,?,?,?,?,?)', rows)
+        cur = con.execute('insert into vol values (?,?,?,?,?,?)',
+                          (m[0], m[1], m[2], y0, y1, zlib.compress(text.encode(), 9)))
+        # FTS rowid 를 vol rowid 에 맞춰 둔다 — 조인 없이 바로 되짚는다.
+        con.execute('insert into src (rowid, body) values (?,?)', (cur.lastrowid, split(text)))
+        rows += 1
     con.commit()
-    books = sorted({r[0] for r in rows})
-    print(f'{len(rows)}권 색인 · {os.path.getsize(DB)/1e6:.0f}MB → {DB}', file=sys.stderr)
-    print('  ' + ' · '.join(f'{b}{sum(1 for r in rows if r[0]==b)}' for b in books), file=sys.stderr)
+    con.execute('vacuum')
+    books_in = [r[0] for r in con.execute('select book from vol')]
+    print(f'{rows}권 색인 · {os.path.getsize(DB)/1e6:.0f}MB → {DB}', file=sys.stderr)
+    print('  ' + ' · '.join(f'{b}{books_in.count(b)}' for b in sorted(set(books_in))), file=sys.stderr)
+
+
+def snippet(text, term, pad=26):
+    """스니펫을 본문에서 직접 자른다. contentless FTS 는 snippet() 을 못 준다."""
+    i = text.find(term)
+    if i < 0:
+        return text[:pad * 2].replace('\n', ' ')
+    a, b = max(0, i - pad), min(len(text), i + len(term) + pad)
+    body = text[a:i] + '《' + term + '》' + text[i + len(term):b]
+    return ('…' if a else '') + body.replace('\n', ' ') + ('…' if b < len(text) else '')
 
 
 def search(term, book=None, era=False, limit=10):
-    """질의 결과를 [{book, vol, title, snippet}] 로 돌려준다. 미검출이면 빈 리스트.
+    """질의 결과를 [{id, book, vol, title, snippet}] 로 돌려준다. 미검출이면 빈 리스트.
 
     CLI 도 MCP 서버도 이 함수 하나만 쓴다 — 표면이 갈라지면 규칙도 갈라진다.
     """
     con = sqlite3.connect(DB)
-    where, args = ['src match ?'], ['body : "' + split(term) + '"']
+    where, args = ['src match ?'], ['"' + split(term) + '"']
     if book:
-        where.append('book = ?'); args.append(book)
+        where.append('v.book = ?'); args.append(book)
     if era:
-        where.append('book in (%s)' % ','.join('?' * len(ERA_BOOKS))); args += sorted(ERA_BOOKS)
+        where.append('v.book in (%s)' % ','.join('?' * len(ERA_BOOKS))); args += sorted(ERA_BOOKS)
     args.append(limit)
     hits = con.execute(
-        'select rowid, book, vol, title, snippet(src, 3, "《", "》", "…", 26) from src '
+        'select v.rowid, v.book, v.vol, v.title, v.body from src join vol v on v.rowid = src.rowid '
         'where ' + ' and '.join(where) + ' order by rank limit ?', args).fetchall()
-    return [{'id': str(r), 'book': b, 'vol': v, 'title': t, 'snippet': s.replace(' ', '')}
-            for r, b, v, t, s in hits]
+    return [{'id': str(r), 'book': b, 'vol': v, 'title': t,
+             'snippet': snippet(zlib.decompress(body).decode(), term)}
+            for r, b, v, t, body in hits]
 
 
 def query(term, book, era, limit):
@@ -160,13 +184,13 @@ def query(term, book, era, limit):
 
 
 def volume(rowid):
-    """권 하나의 전문. 색인은 글자마다 공백을 넣어 저장하므로 되돌려서 준다."""
+    """권 하나의 전문(마크업 제거)."""
     con = sqlite3.connect(DB)
-    row = con.execute('select book, vol, title, body from src where rowid = ?', [rowid]).fetchone()
+    row = con.execute('select book, vol, title, body from vol where rowid = ?', [rowid]).fetchone()
     if not row:
         return None
-    b, v, t, body = row
-    body = body.replace(' ', '')
+    b, v, t, blob = row
+    body = zlib.decompress(blob).decode()
     body = re.sub(r'<ref[^>]*>.*?</ref>|<[^>]+>', '', body)
     body = re.sub(r'\{\{[^{}]*\}\}', '', body)          # 교감주·품질틀. 본문이 아니다.
     body = re.sub(r"\[\[[^\]|]*\|?([^\]]*)\]\]", r'\1', body)
@@ -180,9 +204,10 @@ def main():
     ap.add_argument('--era', action='store_true',
                     help='삼국지 시대(184~280)를 직접 다루는 사서만. 漢書·史記·隋書 등 배경 사서를 뺀다')
     ap.add_argument('--limit', type=int, default=10)
+    ap.add_argument('--books', help='색인에 넣을 사서 접두어 쉼표 구분 (예: sgz,hhs,hyg,js,zztj,yy)')
     a = ap.parse_args()
     if not a.term:
-        build()
+        build(set(a.books.split(',')) if a.books else None)
     elif not os.path.exists(DB):
         sys.exit(f'인덱스가 없다({DB}). 인자 없이 먼저 실행해라.')
     else:
